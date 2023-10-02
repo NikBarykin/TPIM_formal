@@ -14,11 +14,15 @@ NFA::NFA(Vertex start) {
 }
 
 void NFA::addVertex(Vertex vertex) {
-    transitions_[vertex] = VertexTransitionsT();
+    transitions_.emplace(vertex, VertexTransitionsT());
 }
 
 NFA::Vertex NFA::getStart() const {
     return start_;
+}
+
+NFA::Vertex NFA::getMaxVertex() const {
+    return transitions_.rbegin()->first;
 }
 
 std::set<NFA::Vertex> NFA::getVertices() const {
@@ -37,8 +41,7 @@ bool NFA::isFinish(Vertex vertex) const {
 void NFA::addFinish(Vertex new_finish) {
     // check that 'new_finish' exists
     transitions_.at(new_finish);
-    finishes_.insert(new_finish);
-}
+    finishes_.insert(new_finish); }
 
 void NFA::removeFinish(Vertex vertex) {
     if (!finishes_.erase(vertex)) {
@@ -74,9 +77,7 @@ const NFA::VertexTransitionsT& NFA::getTransitions(Vertex source) const {
     return transitions_.at(source);
 }
 
-void NFA::add(const NFA& other) {
-    // we need shift, so new vertices would not overlap with old ones
-    uint32_t shift = transitions_.rbegin()->first + 1;
+void NFA::add(const NFA& other, size_t shift) {
     for (Vertex vertex : other.getVertices()) {
         addVertex(vertex + shift);
     }
@@ -130,10 +131,7 @@ NFA NFA::ReadFrom(std::istream& input) {
     // newline char
     input.ignore();
 
-    while (input) {
-        if (input.peek() == '\n') {
-            break;
-        }
+    while (input && input.peek() != '\n') {
         Vertex v;
 
         input >> v;
@@ -143,35 +141,30 @@ NFA NFA::ReadFrom(std::istream& input) {
         result.addFinish(v);
     }
 
-    while (input)
+    input.ignore();
 
-    for (std::string line; std::getline(input, line); ) {
-        if (line.empty()) {
-            break;
-        }
-        std::istringstream line_stream(std::move(line));
-        Vertex v;
-        line_stream >> v;
-        result.addVertex(v);
-        result.addFinish(v);
-    }
-
-    for (std::string line; std::getline(input, line); ) {
-        if (line.empty()) {
-            break;
-        }
-        std::istringstream line_stream(std::move(line));
+    while (input && input.peek() != '\n') {
         Vertex v1;
         Vertex v2;
         SymbolT symbol;
 
-        line_stream >> v1 >> v2;
-        char symbol_ch;
-        if (line_stream >> symbol_ch) {
-            symbol = symbol_ch;
-        } else {
-            symbol = kEmptySymbol;
+        input >> v1 >> v2;
+
+        if (!input) {
+            break;
         }
+
+        while (input.peek() == ' ') {
+            input.ignore();
+        }
+
+        if (input.peek() == '\n') {
+            symbol = kEmptySymbol;
+        } else {
+            symbol = input.get();
+        }
+
+        input.ignore();
 
         result.addVertex(v1);
         result.addVertex(v2);
