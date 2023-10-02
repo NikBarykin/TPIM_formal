@@ -2,43 +2,44 @@
 
 
 namespace {
-    void RemoveEpsTransisionsImpl(
-            NFA::Vertex source,
+    void CompressEpsTransitionsAndFinishes(
+            NFA::Vertex current,
+            NFA::Vertex target,
             std::set<NFA::Vertex>& visited,
             NFA& nfa) {
+        visited.insert(current);
 
-        visited.insert(source);
-
-        const NFA::VertexTransitionsT& source_transitions = nfa.getTransitions(source);
-        auto eps_transitions_it = source_transitions.find(NFA::kEmptySymbol);
-        if (eps_transitions_it == source_transitions.end()) {
-            return;
-        }
-
-        for (NFA::Vertex dest : *eps_transitions_it) {
-            if (!visited.count(dest)) {
-                RemoveEpsTransisionsImpl(dest, visited, nfa);
-                if (nfa.isFinish(dest)) {
-                    nfa.addFinish(source);
-                }
-            }
-            nfa.removeTransition(source, dest, NFA::kEmptySymbol);
-            for (const auto& [symbol, dest] : nfa.getTransitions(dest)) {
-                if (symbol != NFA::kEmptySymbol) {
-                    nfa.addTransition(source, dest, symbol);
-                }
+        for (NFA::Vertex next : nfa.getTransitions(current)[NFA::kEmptySymbol]) {
+            if (!visited.count(next)) {
+                CompressEpsTransitionsAndFinishes(next, target, visited, nfa);
             }
         }
-        return;
+
+        if (nfa.isFinish(current)) {
+            nfa.addFinish(target);
+        }
+
+        for (const auto& [symbol, destinations] : nfa.getTransitions(current)) {
+            if (symbol == NFA::kEmptySymbol) {
+                continue;
+            }
+            for (NFA::Vertex dest : destinations) {
+                nfa.addTransition(target, dest, symbol);
+            }
+        }
+
+
     }
 }
 
 NFA& NFA::removeEpsTransitions() {
-    std::set<Vertex> visited;
     for (Vertex vertex : getVertices()) {
-        if (!visited.count(vertex)) {
-            RemoveEpsTransisionsImpl(vertex, visited, *this);
-        }
+        std::set<Vertex> visited;
+        CompressEpsTransitionsAndFinishes(vertex, vertex, visited, *this);
+    }
+    // remove all eps-transitions
+    for (Vertex vertex : getVertices()) {
+        getTransitions(vertex).erase(kEmptySymbol);
     }
     return *this;
 }

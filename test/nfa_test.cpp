@@ -27,6 +27,7 @@ TEST(NFAGeneral, Vertices) {
 
     nfa.addTransition(0, 57);
     nfa.addVertex(0);
+
     EXPECT_EQ(nfa.getTransitions(0).size(), 1);
 
     EXPECT_EQ(nfa.getMaxVertex(), 57);
@@ -75,6 +76,8 @@ TEST(NFAGeneral, Transitions) {
     EXPECT_THROW(nfa.getTransitions(57), std::out_of_range);
 
     EXPECT_EQ(nfa.getTransitions(0).at('a').size(), 1);
+    EXPECT_EQ(static_cast<const NFA&>(nfa).getTransitions(0).at('a').size(), 1);
+
     EXPECT_EQ(nfa.getTransitions(0).at('b').size(), 1);
 
     EXPECT_EQ(nfa.getTransitions(1).size(), 0);

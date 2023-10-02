@@ -41,6 +41,7 @@ public:
     void addTransition(Vertex source, Vertex dest, SymbolT symbol = kEmptySymbol);
     void removeTransition(Vertex source, Vertex dest, SymbolT symbol = kEmptySymbol);
     const VertexTransitionsT& getTransitions(Vertex) const;
+    VertexTransitionsT& getTransitions(Vertex);
 
     void add(const NFA& other, size_t shift);
     // add other NFA to 'this' nfa shifting all 'other' vertices by shift value

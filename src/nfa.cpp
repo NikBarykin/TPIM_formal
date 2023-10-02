@@ -77,6 +77,10 @@ const NFA::VertexTransitionsT& NFA::getTransitions(Vertex source) const {
     return transitions_.at(source);
 }
 
+NFA::VertexTransitionsT& NFA::getTransitions(Vertex source) {
+    return transitions_.at(source);
+}
+
 void NFA::add(const NFA& other, size_t shift) {
     for (Vertex vertex : other.getVertices()) {
         addVertex(vertex + shift);

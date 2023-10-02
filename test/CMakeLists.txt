@@ -6,7 +6,12 @@ set(SOURCES ${automata-source-files})
 
 message(INFO ${SOURCES})
 
-set(TEST_SOURCES nfa_test.cpp regex_ast_test.cpp)
+set(TEST_SOURCES
+    nfa_test.cpp
+    regex_ast_test.cpp
+    nfa_remove_eps_transitions_test.cpp
+    )
+
 run_coverage(
         "${TEST_SOURCES}"
         "${SOURCES}"
