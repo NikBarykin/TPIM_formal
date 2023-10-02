@@ -9,59 +9,48 @@
 #include "nfa.h"
 
 
-NFA::Vertex::Vertex(std::string label): label(std::move(label)) {}
-
-
-NFA::NFA(std::string start_label): start_(addVertex(std::move(start_label))) {}
-
-
-NFA::VertexHandler NFA::addVertex(std::string label) {
-    if (label.empty()) {
-        label = std::to_string(transitions_.size());
-    }
-    auto it = vertices_by_labels_.find(label);
-    if (it != vertices_by_labels_.end()) {
-        return it->second;
-    }
-    VertexHandler new_vertex = std::make_shared<Vertex>(label);
-    vertices_by_labels_[std::move(label)] = new_vertex;
-    transitions_[new_vertex] = VertexTransitionsT();
-    return new_vertex;
+NFA::NFA(Vertex start) {
+    addVertex(start);
 }
 
-NFA::VertexHandler NFA::getVertexByLabel(std::string label) const {
-    return vertices_by_labels_.at(label);
+void NFA::addVertex(Vertex vertex) {
+    transitions_[vertex] = VertexTransitionsT();
 }
 
-NFA::VertexHandler NFA::getStart() const {
+NFA::Vertex NFA::getStart() const {
     return start_;
 }
 
-std::set<NFA::VertexHandler> NFA::getVertices() const {
-    std::set<VertexHandler> result;
+std::set<NFA::Vertex> NFA::getVertices() const {
+    std::set<Vertex> result;
     for (const auto& [vertex, _] : transitions_) {
         result.insert(vertex);
     }
     return result;
 }
 
-bool NFA::isFinish(VertexHandler vertex) const {
+bool NFA::isFinish(Vertex vertex) const {
+    transitions_.at(vertex);
     return getFinishes().count(vertex);
 }
 
-void NFA::addFinish(VertexHandler new_finish) {
+void NFA::addFinish(Vertex new_finish) {
+    // check that 'new_finish' exists
+    transitions_.at(new_finish);
     finishes_.insert(new_finish);
 }
 
-void NFA::removeFinish(VertexHandler vertex) {
-    finishes_.erase(vertex);
+void NFA::removeFinish(Vertex vertex) {
+    if (!finishes_.erase(vertex)) {
+        throw std::out_of_range("Vertex " + std::to_string(vertex) + " is not finish");
+    }
 }
 
-const std::set<NFA::VertexHandler>& NFA::getFinishes() const {
+const std::set<NFA::Vertex>& NFA::getFinishes() const {
     return finishes_;
 }
 
-NFA::VertexHandler NFA::getSingleFinish() const {
+NFA::Vertex NFA::getSingleFinish() const {
     if (finishes_.size() != 1) {
         throw std::logic_error(
                 "Number of finishes is " + std::to_string(finishes_.size()) + " != 1");
@@ -69,22 +58,38 @@ NFA::VertexHandler NFA::getSingleFinish() const {
     return *finishes_.begin();
 }
 
-void NFA::addTransition(VertexHandler source, VertexHandler dest, SymbolT symbol) {
+void NFA::addTransition(Vertex source, Vertex dest, SymbolT symbol) {
+    transitions_.at(dest);
     transitions_.at(source)[symbol].insert(dest);
 }
 
-void NFA::removeTransition(VertexHandler source, VertexHandler dest, SymbolT symbol) {
-    transitions_.at(source)[symbol].erase(dest);
+void NFA::removeTransition(Vertex source, Vertex dest, SymbolT symbol) {
+    if (!transitions_.at(source).at(symbol).erase(dest)) {
+        throw std::out_of_range(
+                "Trying to remove transition that doesn't exist");
+    }
 }
 
-const NFA::VertexTransitionsT& NFA::getTransitions(VertexHandler source) const {
+const NFA::VertexTransitionsT& NFA::getTransitions(Vertex source) const {
     return transitions_.at(source);
 }
 
-void NFA::merge(NFA other) {
-    vertices_by_labels_.merge(std::move(other.vertices_by_labels_));
-    finishes_.merge(std::move(other.finishes_));
-    transitions_.merge(std::move(other.transitions_));
+void NFA::add(const NFA& other) {
+    // we need shift, so new vertices would not overlap with old ones
+    uint32_t shift = transitions_.rbegin()->first + 1;
+    for (Vertex vertex : other.getVertices()) {
+        addVertex(vertex + shift);
+    }
+    for (Vertex vertex : other.getFinishes()) {
+        addFinish(vertex + shift);
+    }
+    for (Vertex source : other.getVertices()) {
+        for (const auto& [symbol, destinations] : other.getTransitions(source)) {
+            for (Vertex dest : destinations) {
+                addTransition(source + shift, dest + shift, symbol);
+            }
+        }
+    }
 }
 
 size_t NFA::countVertices() const noexcept {
@@ -92,19 +97,19 @@ size_t NFA::countVertices() const noexcept {
 }
 
 void NFA::dumpTo(std::ostream& output) const {
-    output << getStart()->label << '\n';
+    output << getStart() << '\n';
     output << '\n';
 
-    for (VertexHandler finish_v : getFinishes()) {
-        output << finish_v->label << '\n';
+    for (Vertex finish_v : getFinishes()) {
+        output << finish_v << '\n';
     }
 
     output << '\n';
 
-    for (VertexHandler source : getVertices()) {
+    for (Vertex source : getVertices()) {
         for (const auto& [symbol, destinations] : getTransitions(source)) {
-            for (VertexHandler destination : destinations) {
-                output << source->label << ' ' << destination->label;
+            for (Vertex destination : destinations) {
+                output << source << ' ' << destination;
                 if (symbol != NFA::kEmptySymbol) {
                     output << ' ' << *symbol;
                 }
@@ -116,18 +121,38 @@ void NFA::dumpTo(std::ostream& output) const {
 
 
 NFA NFA::ReadFrom(std::istream& input) {
-    std::string start_label;
-    std::getline(input, start_label);
-    NFA result(std::move(start_label));
+    Vertex start;
+    input >> start;
+    // newline char
+    input.ignore();
+    NFA result(start);
 
     // newline char
     input.ignore();
+
+    while (input) {
+        if (input.peek() == '\n') {
+            break;
+        }
+        Vertex v;
+
+        input >> v;
+        input.ignore();
+
+        result.addVertex(v);
+        result.addFinish(v);
+    }
+
+    while (input)
 
     for (std::string line; std::getline(input, line); ) {
         if (line.empty()) {
             break;
         }
-        NFA::VertexHandler v = result.addVertex(std::move(line));
+        std::istringstream line_stream(std::move(line));
+        Vertex v;
+        line_stream >> v;
+        result.addVertex(v);
         result.addFinish(v);
     }
 
@@ -136,20 +161,20 @@ NFA NFA::ReadFrom(std::istream& input) {
             break;
         }
         std::istringstream line_stream(std::move(line));
-        std::string v1_label;
-        std::string v2_label;
-        NFA::SymbolT symbol;
+        Vertex v1;
+        Vertex v2;
+        SymbolT symbol;
 
-        line_stream >> v1_label >> v2_label;
+        line_stream >> v1 >> v2;
         char symbol_ch;
         if (line_stream >> symbol_ch) {
             symbol = symbol_ch;
         } else {
-            symbol = NFA::kEmptySymbol;
+            symbol = kEmptySymbol;
         }
 
-        NFA::VertexHandler v1 = result.addVertex(std::move(v1_label));
-        NFA::VertexHandler v2 = result.addVertex(std::move(v2_label));
+        result.addVertex(v1);
+        result.addVertex(v2);
 
         result.addTransition(v1, v2, symbol);
     }
